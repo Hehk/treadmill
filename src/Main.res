@@ -21,6 +21,17 @@ module App = {
         </div>
       | None => <div> {React.string("No active workout")} </div>
       }}
+      <h1> {React.string("Read Workouts")} </h1>
+      <button
+        onClick={_ =>
+          Background.readWorkouts()
+          ->Promise.then(x => {
+            Js.log(x)
+            Promise.resolve(x)
+          })
+          ->ignore}>
+        {"Read Workouts"->React.string}
+      </button>
     </div>
   }
 }

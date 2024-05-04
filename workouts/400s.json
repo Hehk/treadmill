@@ -1,0 +1,104 @@
+{
+  "name": "4x200 10x400 4x200",
+  "description": "4x200m at 5:20 pace, 10x400m at 5:40 pace, 4x200m at 5:20 pace",
+  "steps": [
+    {
+      "type": "run",
+      "name": "Warm up",
+      "duration": "15:00",
+      "pace": {
+        "value": "9:00",
+        "unit": "min/mi"
+      },
+      "angle": 2
+    },
+    {
+      "type": "repeat",
+      "times": 4,
+      "steps": [
+        {
+          "type": "run",
+          "name": "200m",
+          "duration": "0:40",
+          "pace": {
+            "value": "5:20",
+            "unit": "min/mi"
+          },
+          "angle": 2
+        },
+        {
+          "type": "run",
+          "name": "Rest",
+          "duration": "1:20",
+          "pace": {
+            "value": "10:00",
+            "unit": "min/mi"
+          },
+          "angle": 2
+        }
+      ]
+    },
+    {
+      "type": "repeat",
+      "times": 10,
+      "steps": [
+        {
+          "type": "run",
+          "name": "400m",
+          "duration": "1:20",
+          "pace": {
+            "value": "5:40",
+            "unit": "min/mi"
+          },
+          "angle": 2
+        },
+        {
+          "type": "run",
+          "name": "Rest",
+          "duration": "2:40",
+          "pace": {
+            "value": "10:00",
+            "unit": "min/mi"
+          },
+          "angle": 2
+        }
+      ]
+    },
+    {
+      "type": "repeat",
+      "times": 4,
+      "steps": [
+        {
+          "type": "run",
+          "name": "200m",
+          "duration": "0:40",
+          "pace": {
+            "value": "5:20",
+            "unit": "min/mi"
+          },
+          "angle": 2
+        },
+        {
+          "type": "run",
+          "name": "Rest",
+          "duration": "1:20",
+          "pace": {
+            "value": "10:00",
+            "unit": "min/mi"
+          },
+          "angle": 2
+        }
+      ]
+    },
+    {
+      "type": "run",
+      "name": "Cool down",
+      "duration": "15:00",
+      "pace": {
+        "value": "9:00",
+        "unit": "min/mi"
+      },
+      "angle": 2
+    }
+  ]
+}

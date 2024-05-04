@@ -7,7 +7,7 @@ use btleplug::api::{
 use futures::StreamExt;
 use btleplug::platform::{Adapter, Manager, Peripheral};
 use serde::{Deserialize, Serialize};
-use std::{sync::{Arc, Mutex}, time::Duration};
+use std::{fs, sync::{Arc, Mutex}, time::Duration};
 use tokio::time;
 use uuid::Uuid;
 
@@ -269,6 +269,168 @@ async fn find_treadmill(central: &Adapter) -> Option<Peripheral> {
     return None;
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "unit", content = "value")]
+enum PaceRaw {
+    #[serde(rename = "mph")]
+    MPH(String),
+    #[serde(rename = "kph")]
+    KPH(String),
+    #[serde(rename = "min/mi")]
+    MinPerMi(String),
+    #[serde(rename = "min/km")]
+    MinPerKm(String),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
+enum WorkoutStepRaw {
+    #[serde(rename = "repeat")]
+    Repeat {
+        times: u8,
+        steps: Vec<WorkoutStepRaw>,
+    },
+    #[serde(rename = "run")]
+    Run {
+        name: String,
+        duration: String,
+        pace: PaceRaw,
+        angle: i16
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct WorkoutRaw {
+    name: String,
+    description: String,
+    steps: Vec<WorkoutStepRaw>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+struct WorkoutStep {
+    name: String,
+    duration: u16,
+    distance: u16,
+    // Km/h at 0.01 precision
+    pace: u16,
+    angle: i16,
+}
+
+#[derive(Debug, Serialize)]
+struct Workout {
+    duration: u16,
+    distance: u16,
+    steps: Vec<WorkoutStep>,
+    name: String,
+    description: String,
+}
+
+fn parse_pace(pace: &PaceRaw) -> u16 {
+    match pace {
+        PaceRaw::MinPerMi(value) => {
+            let parts = value.split(":").collect::<Vec<_>>();
+            let minutes = parts.get(0).unwrap_or(&"0").parse::<u16>().unwrap();
+            let seconds = parts.get(1).unwrap_or(&"0").parse::<u16>().unwrap();
+            let seconds_per_mile = (minutes * 60 + seconds) as f64;
+            let km_per_hour = 1. / seconds_per_mile * (60.0 * 60.0) * (1.60934/1.);
+            println!("Seconds per mile: {:?}", seconds_per_mile as u16);
+            println!("Km per hour: {:?}", (km_per_hour * 100.) as u16);
+            (km_per_hour * 100.) as u16
+        }
+        _ => {
+            0
+        }
+    }
+}
+
+fn parse_duration(pace: &str) -> u16 {
+    let parts = pace.split(":").collect::<Vec<_>>();
+    let minutes = parts.get(0).unwrap_or(&"0").parse::<u16>().unwrap();
+    let seconds = parts.get(1).unwrap_or(&"0").parse::<u16>().unwrap();
+    minutes * 60 + seconds
+}
+
+fn parse_workout_step(step: &WorkoutStepRaw) -> Vec<WorkoutStep> {
+    match step {
+        WorkoutStepRaw::Repeat { times, steps } => {
+            let steps = steps.iter().flat_map(|s| parse_workout_step(s)).collect::<Vec<_>>();
+            let mut result = Vec::new();
+            for _ in 0..*times {
+                result.extend(steps.clone());
+            }
+            result
+        },
+        WorkoutStepRaw::Run { name, duration, pace, angle } => {
+            let pace = parse_pace(pace);
+            let duration = parse_duration(duration);
+            let distance = (pace as f32 * duration as f32 / 1000.0) as u16;
+            vec![WorkoutStep {
+                name: name.clone(),
+                duration,
+                distance,
+                pace,
+                angle: *angle,
+            }]
+        }
+    }
+}
+
+fn parse_workout(workout: &WorkoutRaw) -> Workout {
+    let steps = workout.steps.iter().flat_map(|s| parse_workout_step(s)).collect::<Vec<_>>();
+    let mut distance = 0;
+    let mut duration = 0;
+    for step in &steps {
+        distance += step.distance;
+        duration += step.duration;
+    }
+
+    Workout {
+        duration,
+        distance,
+        steps,
+        name: workout.name.clone(),
+        description: workout.description.clone(),
+    }
+}
+
+#[tauri::command]
+fn read_workouts() -> Result<Vec<String>, String> {
+    let paths = match fs::read_dir("/Users/kyle/Projects/run/workouts") {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("Error reading workouts directory: {:?}", e);
+            return Err("Error reading workouts directory.".to_string());
+        }
+    };
+
+    let mut workouts = Vec::new();
+    for path in paths {
+        let path = path.unwrap();
+        workouts.push(path.file_name().into_string().unwrap());
+
+        let file = fs::read_to_string(path.path());
+        let content = match file {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("Error reading file: {:?}", e);
+                return Err("Error reading file.".to_string());
+            }
+        };
+        let workout: WorkoutRaw = match serde_json::from_str(&content) {
+            Ok(w) => w,
+            Err(e) => {
+                eprintln!("Error parsing JSON: {:?}", e);
+                return Err("Error parsing JSON.".to_string());
+            }
+        };
+        println!("Raw Workout {:?}", workout);
+        let parsed_workout = parse_workout(&workout);
+        println!("Parsed Workout {:?}", parsed_workout);
+    }
+
+    Ok(workouts)
+}
+
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
 async fn connect_to_treadmill(name: String) -> Result<String, String> {
@@ -339,7 +501,7 @@ async fn connect_to_treadmill(name: String) -> Result<String, String> {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![connect_to_treadmill])
+        .invoke_handler(tauri::generate_handler![connect_to_treadmill, read_workouts])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -1,15 +1,22 @@
 type workout = {name: string}
 type subscription = unit => unit
+type bluetooth =
+  | Off
+  | Scanning
+  | Connected
+
 type t = {
   workouts: array<workout>,
   activeWorkout: option<workout>,
   subscriptions: Set.t<subscription>,
+  bluetooth: bluetooth,
 }
 
 let state = ref({
   workouts: [{name: "6x400"}, {name: "10x3min"}],
   activeWorkout: None,
   subscriptions: Set.make(),
+  bluetooth: Off,
 })
 
 type action =
@@ -30,11 +37,9 @@ let reduce = (state, action) =>
     }
   | SubscriptionAdd(subscription) =>
     state.subscriptions->Set.add(subscription)
-    Js.log2("Add", state.subscriptions->Set.size)
     state
   | SubscriptionRemove(subscription) =>
     state.subscriptions->Set.delete(subscription)->ignore
-    Js.log2("Remove", state.subscriptions->Set.size)
     state
   }
 
